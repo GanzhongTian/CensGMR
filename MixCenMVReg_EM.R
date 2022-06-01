@@ -1,15 +1,13 @@
-# source("Util_Func.R")
-
 MixCenMVReg_EM=function(Y, C, X, G=2, Max.iter=1000, 
                         pie_hat=NA, beta_hat=NA, sigma_hat=NA, diff.tol=1e-3, 
-                        print=TRUE, init_class=NA, calc_cov=TRUE){
+                        print=TRUE, init_class=NA, calc_cov=FALSE){
   
   
   N=dim(Y)[1]
   P=dim(Y)[2]
   D=dim(X)[2]
-    
-  if(is.na(init_class)==FALSE){
+
+  if(is.na(sum(as.integer(init_class)))==FALSE){
       G=length(levels(init_class))
   }
     
@@ -46,7 +44,7 @@ MixCenMVReg_EM=function(Y, C, X, G=2, Max.iter=1000,
   # ind_density=matrix(NA,nrow=N,ncol=G) #individual contribution to likelihood (NxK)
   log.ind_density=matrix(NA,nrow=N,ncol=G)
   while(iter<Max.iter & diff>diff.tol){
-    
+    # print(iter)
     
     if(iter==0 & initial==FALSE){
       
@@ -57,7 +55,7 @@ MixCenMVReg_EM=function(Y, C, X, G=2, Max.iter=1000,
       # tau_hat=matrix(rep(0,N*G), nrow=N, ncol=G)
       tau_hat=matrix(rep(1e-3,N*G), nrow=N, ncol=G)
       
-      if(is.na(init_class)){
+      if(is.na(sum(as.integer(init_class)))){
 
           ### Then randomly assign every one to be 1/G
           subsample=sample(1:N,round(N/10),replace=FALSE)
@@ -76,11 +74,13 @@ MixCenMVReg_EM=function(Y, C, X, G=2, Max.iter=1000,
       beta_hat=list()  
       sigma_hat=list()  
       for(g in 1:G){
-        mu_hat[[g]]=tau_hat[,g]*Y
+        # mu_hat[[g]]=tau_hat[,g]*Y
           
         beta_hat[[g]]=solve(t(X)%*%diag(tau_hat[,g])%*%X)%*%t(X)%*%diag(tau_hat[,g])%*%Y  
-          
-        sigma_hat[[g]]=cov(tau_hat[,g]*Y)  
+        mu_hat[[g]]=X%*%beta_hat[[g]]  
+        # sigma_hat[[g]]=cov(tau_hat[,g]*Y)  
+        # sigma_hat[[g]]=cov(tau_hat[,g]*(Y-mu_hat[[g]]))
+        sigma_hat[[g]]=cov.wt(as.matrix(Y-mu_hat[[g]]),tau_hat[,g])$cov
       }
       
 #       beta_hat=list()
@@ -92,8 +92,8 @@ MixCenMVReg_EM=function(Y, C, X, G=2, Max.iter=1000,
 #       for(g in 1:G){
 #         sigma_hat[[g]]=cov(tau_hat[,g]*Y)
 #       }
-      
-      
+      # print(beta_hat)
+      # print(sigma_hat)
     }else{
       
       for(g in 1:G){
@@ -194,7 +194,11 @@ MixCenMVReg_EM=function(Y, C, X, G=2, Max.iter=1000,
     }
     
     iter = iter + 1
-
+      
+    if(min(unlist(lapply(sigma_hat,diag)))<1e-10){
+            message("EM stopped becaused of degenerating solution!")
+            break  
+    }
   } 
     
     

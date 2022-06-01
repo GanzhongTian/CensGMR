@@ -1,12 +1,12 @@
 MixCenUVReg_EM=function(Y, C, X, G=2, Max.iter=1000, 
                         pie_hat=NA, beta_hat=NA, sigma_hat=NA, diff.tol=1e-3,
-                        print=TRUE, init_class=NA,calc_cov=TRUE){
+                        print=TRUE, init_class=NA,calc_cov=FALSE){
     #data must be 1-dimensional vector
     #C must be 1-dimensional vector of -1,0,1 (left, no, right)
     ##############################################
     # input:    -Y    :a cont 1-dimensional vector of length n, 
     #           -X    :a design matrix containing the covariates of dimension nxp 
-    #           -C    : a 1-dimensional vector of length n, taking -1,0,1 (left, no, right)
+    #           -C    :a 1-dimensional vector of length n, taking -1,0,1 (left, no, right)
     #           
     # output:   a list of parameters and posteriors
     ##############################################
@@ -16,7 +16,7 @@ MixCenUVReg_EM=function(Y, C, X, G=2, Max.iter=1000,
     P=dim(Y)[2]
     D=dim(X)[2]
     
-    if(is.na(init_class)==FALSE){
+    if(is.na(sum(as.integer(init_class)))==FALSE){
         G=length(levels(init_class))
     }
     
@@ -57,7 +57,7 @@ MixCenUVReg_EM=function(Y, C, X, G=2, Max.iter=1000,
            stop("Intial pie, beta, sigma lengths are different")
         }
 
-
+        
         mu_hat=list()
         for(g in 1:G){
           mu_hat[[g]]=X%*%beta_hat[[g]]
@@ -87,7 +87,7 @@ MixCenUVReg_EM=function(Y, C, X, G=2, Max.iter=1000,
       # tau_hat=matrix(rep(0,N*G), nrow=N, ncol=G)
       tau_hat=matrix(rep(1e-3,N*G), nrow=N, ncol=G)
                 
-      if(is.na(init_class)){
+      if(is.na(sum(as.integer(init_class)))){
 
           ### Then randomly assign every one to be 1/G
           subsample=sample(1:N,round(N/10),replace=FALSE)
@@ -106,11 +106,12 @@ MixCenUVReg_EM=function(Y, C, X, G=2, Max.iter=1000,
       beta_hat=list()  
       sigma_hat=list()  
       for(g in 1:G){
-        mu_hat[[g]]=tau_hat[,g]*Y
+        # mu_hat[[g]]=tau_hat[,g]*Y
           
-        beta_hat[[g]]=solve(t(X)%*%diag(tau_hat[,g])%*%X)%*%t(X)%*%diag(tau_hat[,g])%*%Y  
+        beta_hat[[g]]=solve(t(X)%*%diag(tau_hat[,g])%*%X)%*%t(X)%*%diag(tau_hat[,g])%*%Y
+        mu_hat[[g]]=X%*%beta_hat[[g]]  
         # sigma_hat[[g]]=cov(tau_hat[,g]*Y)
-        sigma_hat[[g]]=cov.wt(as.matrix(Y),tau_hat[,g])$cov[1,1]
+        sigma_hat[[g]]=cov.wt(as.matrix(Y-mu_hat[[g]]),tau_hat[,g])$cov[1,1]
       }     
       
     }else{
@@ -125,7 +126,7 @@ MixCenUVReg_EM=function(Y, C, X, G=2, Max.iter=1000,
         }
 
         log.ind_density[is.infinite(log.ind_density)]=-999                
-                
+            
         new_tau_hat=exp(sweep(log.ind_density, 1, apply(log.ind_density,1,logSumExp))) #(NxG)
                 
         # new_tau_hat=ind_density/apply(ind_density,1,sum) #(NxG)
@@ -146,7 +147,7 @@ MixCenUVReg_EM=function(Y, C, X, G=2, Max.iter=1000,
         new_pie_hat=apply(tau_hat,2,mean)
         diff=max(abs(pie_hat-new_pie_hat))
         pie_hat=new_pie_hat
-
+        
         # Update beta_hat
         Y_star=list()
             for(g in 1:G){
@@ -206,6 +207,12 @@ MixCenUVReg_EM=function(Y, C, X, G=2, Max.iter=1000,
             }
         }
         iter = iter + 1
+
+        if(min(unlist(sigma_hat))<1e-10){
+            message("EM stopped becaused of degenerating solution!")
+            break
+        }
+        
     }    
 
 
