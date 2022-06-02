@@ -1,0 +1,13 @@
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=32
+#SBATCH --mem=4G
+#SBATCH --time=10:00:00
+#SBATCH --partition=alz
+#SBATCH --job-name=R_02_Case3_Bias_r51n1000
+#SBATCH --error=R_02_Case3_Bias_r51n1000.%J.err
+#SBATCH --output=R_02_Case3_Bias_r51n1000.%J.out
+
+module load R/4.0.2
+
+Rscript 02_Case3_Bias_r51n1000.R

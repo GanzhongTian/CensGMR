@@ -1,12 +1,16 @@
-# source("Util_Func.R")
-
-MixCenMVReg_EM=function(Y, C, X, G=2, Max.iter=1000, pie_hat=NA, beta_hat=NA, sigma_hat=NA, diff.tol=1e-3, print=TRUE, calc_cov=TRUE){
+MixCenMVReg_EM=function(Y, C, X, G=2, Max.iter=1000, 
+                        pie_hat=NA, beta_hat=NA, sigma_hat=NA, diff.tol=1e-3, 
+                        print=TRUE, init_class=NA, calc_cov=FALSE){
   
   
   N=dim(Y)[1]
   P=dim(Y)[2]
   D=dim(X)[2]
-  
+
+  if(is.na(sum(as.integer(init_class)))==FALSE){
+      G=length(levels(init_class))
+  }
+    
   if(is.null(colnames(Y))){
     colnames(Y)=paste(rep('Y',P), 1:P, sep="_")
   }
@@ -31,16 +35,16 @@ MixCenMVReg_EM=function(Y, C, X, G=2, Max.iter=1000, pie_hat=NA, beta_hat=NA, si
   }
   
   
-  all_obs.LogLik=c()
+  all_obs.LogLik=c(-Inf)
   
   # set initial iteration number:
   iter=0
   diff=Inf
   # set initial conditional probabilities:
-  ind_density=matrix(NA,nrow=N,ncol=G) #individual contribution to likelihood (NxK)
-  
+  # ind_density=matrix(NA,nrow=N,ncol=G) #individual contribution to likelihood (NxK)
+  log.ind_density=matrix(NA,nrow=N,ncol=G)
   while(iter<Max.iter & diff>diff.tol){
-    
+    # print(iter)
     
     if(iter==0 & initial==FALSE){
       
@@ -48,60 +52,101 @@ MixCenMVReg_EM=function(Y, C, X, G=2, Max.iter=1000, pie_hat=NA, beta_hat=NA, si
       
       ### First assign every one to be 1/G or a very small value
       #             tau_hat=matrix(rep(1/G,N*G), nrow=N, ncol=G)
-      tau_hat=matrix(rep(0,N*G), nrow=N, ncol=G)
+      # tau_hat=matrix(rep(0,N*G), nrow=N, ncol=G)
+      tau_hat=matrix(rep(1e-3,N*G), nrow=N, ncol=G)
       
-      ## Only consider uncensored case:
-#       subsample=which(apply(abs(C),1,sum)==0)
-      
-#       n=length(subsample)
-      ### Then randomly assign every one to be 1/G
-#       subsample=sample(subsample,round(n/10),replace=FALSE)
-      subsample=sample(1:N,round(N/10),replace=FALSE)
-      tau_hat[subsample,]=t(rmultinom(round(N/10), 1, rep(1,G)/G))
-        
-#       tau_hat[subsample,]=t(rmultinom(round(n/10), 1, rep(1,G)/G))
+      if(is.na(sum(as.integer(init_class)))){
+
+          ### Then randomly assign every one to be 1/G
+          subsample=sample(1:N,round(N/10),replace=FALSE)
+          tau_hat[subsample,]=t(rmultinom(round(N/10), 1, rep(1,G)/G))
+          
+      }else{
+          ### Assign the initial class label if the label is provided
+          for(g in 1:G){
+              tau_hat[init_class==(levels(init_class)[g]),g]=1
+          }
+          
+      }
       pie_hat=apply(tau_hat,2,mean)
         
       mu_hat=list()
+      beta_hat=list()  
+      sigma_hat=list()  
       for(g in 1:G){
-        mu_hat[[g]]=tau_hat[,g]*Y
+        # mu_hat[[g]]=tau_hat[,g]*Y
+          
+        beta_hat[[g]]=solve(t(X)%*%diag(tau_hat[,g])%*%X)%*%t(X)%*%diag(tau_hat[,g])%*%Y  
+        mu_hat[[g]]=X%*%beta_hat[[g]]  
+        # sigma_hat[[g]]=cov(tau_hat[,g]*Y)  
+        # sigma_hat[[g]]=cov(tau_hat[,g]*(Y-mu_hat[[g]]))
+        sigma_hat[[g]]=cov.wt(as.matrix(Y-mu_hat[[g]]),tau_hat[,g])$cov
       }
       
-      beta_hat=list()
-      for(g in 1:G){
-        beta_hat[[g]]=solve(t(X)%*%diag(tau_hat[,g])%*%X)%*%t(X)%*%diag(tau_hat[,g])%*%Y
-      }
+#       beta_hat=list()
+#       for(g in 1:G){
+        
+#       }
       
-      sigma_hat=list()
-      for(g in 1:G){
-        sigma_hat[[g]]=cov(tau_hat[,g]*Y)
-      }
-      
-      
+#       sigma_hat=list()
+#       for(g in 1:G){
+#         sigma_hat[[g]]=cov(tau_hat[,g]*Y)
+#       }
+      # print(beta_hat)
+      # print(sigma_hat)
     }else{
       
       for(g in 1:G){
         ## E-step: computing individual observation's contribution to the likelihood
-        ind_density[,g]=pie_hat[g]*mapply(eval_density, 
-                                          y=split(t(Y), rep(1:N, each = P)),
-                                          c=split(t(C), rep(1:N, each = P)), 
-                                          m=split(t(mu_hat[[g]]), rep(1:N, each = P)), 
-                                          MoreArgs=list(v=sigma_hat[[g]]))
+        # ind_density[,g]=pie_hat[g]*mapply(eval_density, 
+        #                                   y=split(t(Y), rep(1:N, each = P)),
+        #                                   c=split(t(C), rep(1:N, each = P)), 
+        #                                   m=split(t(mu_hat[[g]]), rep(1:N, each = P)), 
+        #                                   MoreArgs=list(v=sigma_hat[[g]]))
+        log.ind_density[,g]=log(pie_hat[g])+mapply(eval_density, 
+                                                   y=split(t(Y), rep(1:N, each = P)),
+                                                   c=split(t(C), rep(1:N, each = P)), 
+                                                   m=split(t(mu_hat[[g]]), rep(1:N, each = P)), 
+                                                   MoreArgs=list(v=sigma_hat[[g]]))  
       }
-      
+        
+        # because some of the values are tooo small
+      log.ind_density[is.infinite(log.ind_density)]=-999
+      # print(any(is.na(log.ind_density)))
+      # print(dim(log.ind_density))
+      # print(log.ind_density)
+      # print(apply(log.ind_density,1,logSumExp))
+      # print(str(apply(log.ind_density,1,logSumExp))) 
+      # print(dim(apply(log.ind_density,1,logSumExp)))
       ## E-step: computing the conditional posterior probabilities tau_hat
-      tau_hat=ind_density/apply(ind_density,1,sum) #(NxG)
+      # tau_hat=ind_density/apply(ind_density,1,sum) #(NxG)
+      new_tau_hat=exp(sweep(log.ind_density, 1, apply(log.ind_density,1,logSumExp)))
+      # tau_hat[is.na(tau_hat)]=1/G # adjust the nans 
       
-      tau_hat[is.na(tau_hat)]=1/G # adjust the nans 
+      # tau_hat[tau_hat< 1e-300]=1e-300 # adjust the 0    
       
-      tau_hat[tau_hat< 1e-300]=1e-300 # adjust the 0    
-      
+      # tau_hat[is.na(tau_hat)]=1e-300 # adjust the nans 
       # Evaluate Likelihood using the ind_density for convenience
-      obs.LogLik=sum(log(apply(ind_density,1,sum)))
+      # obs.LogLik=sum(log(apply(ind_density,1,sum)))
+        
+      obs.LogLik=sum(apply(log.ind_density,1,logSumExp))  
+       
+      # if(length(all_obs.LogLik)>1){                           
+      #    if(obs.LogLik<tail(all_obs.LogLik, n=1)){
+      #         message('Warning: numeric precision of conditional truncated probability may have lowered, return max Loglik stored')
+      #         break
+      #     }else{
+      #         all_obs.LogLik=append(all_obs.LogLik,obs.LogLik)
+      #         tau_hat=new_tau_hat
+      #     }
+      # }else{
+      #    all_obs.LogLik=append(all_obs.LogLik,obs.LogLik)
+      #    tau_hat=new_tau_hat
+      # }
+        
+        
       all_obs.LogLik=append(all_obs.LogLik,obs.LogLik)
-      
-      
-      
+      tau_hat=new_tau_hat  
       ## M-step: Update pie_hat
       new_pie_hat=apply(tau_hat,2,mean)
       diff=max(abs(pie_hat-new_pie_hat))
@@ -125,7 +170,8 @@ MixCenMVReg_EM=function(Y, C, X, G=2, Max.iter=1000, pie_hat=NA, beta_hat=NA, si
         
         mu_hat[[g]]=X%*%beta_hat[[g]]
       } 
-      
+      # print(mu_hat)
+      # print(sigma_hat)
       ## M-step: Update sigma_hat      
       S_star=list()
       for(g in 1:G){
@@ -148,7 +194,11 @@ MixCenMVReg_EM=function(Y, C, X, G=2, Max.iter=1000, pie_hat=NA, beta_hat=NA, si
     }
     
     iter = iter + 1
-
+      
+    if(min(unlist(lapply(sigma_hat,diag)))<1e-10){
+            message("EM stopped becaused of degenerating solution!")
+            break  
+    }
   } 
     
     
@@ -194,7 +244,7 @@ MixCenMVReg_EM=function(Y, C, X, G=2, Max.iter=1000, pie_hat=NA, beta_hat=NA, si
 
       obs_Info=t(all_score)%*%all_score
 
-      if(any(eigen(obs_Info)$values<=0)){
+      if(any(eigen(obs_Info)$values<=1e-6)){
         cov_notPD=TRUE
         print('The Cov matrix for coefficients is not positive definite')
 
@@ -228,6 +278,7 @@ MixCenMVReg_EM=function(Y, C, X, G=2, Max.iter=1000, pie_hat=NA, beta_hat=NA, si
     print(beta_hat)
     print(sigma_hat)
     #         print(obs_Info)
+    plot(all_obs.LogLik[-1],xlab="Iterations", ylab="Log-Likelihood",)    
   }
   
   LogLik=tail(all_obs.LogLik, n=1)

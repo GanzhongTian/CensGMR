@@ -1,3 +1,32 @@
+v_censnorm<-function(cen_interval=c(-Inf,Inf), mu=0, sig=1){
+  
+  lower=cen_interval[1]
+  upper=cen_interval[2]
+  
+  A=(lower-mu)/sig; B=(upper-mu)/sig
+  
+  if(A==-Inf & B!=Inf){  
+    logZ=pnorm(B,log.p = T)
+    lognumer=dnorm(B,log= T)
+    
+    Frac=exp(lognumer-logZ)
+    
+    res=sig^2*(1-B*Frac-Frac^2)
+  } else if(A!=-Inf & B==Inf){
+    logZ=pnorm(A,lower.tail=F, log.p = T)
+    lognumer=dnorm(A,log= T)
+    
+    Frac=exp(lognumer-logZ)
+    
+    res=sig^2*(1+A*Frac-Frac^2)
+  } else if(A==-Inf & B==Inf){
+    res=sig^2  
+  }
+  return(res)
+}
+
+
+
 eval_density=function(y,c,m,v){
   ##############################################
   # input:    -y    :a p-dimension vectors of continous values: observed manifest vars
@@ -17,9 +46,11 @@ eval_density=function(y,c,m,v){
     
     v_obs=as.matrix(v[(obslst),(obslst)])
     
-    f_obs=dmvnorm(y_obs,m_obs,v_obs)
+    # f_obs=dmvnorm(y_obs,m_obs,v_obs)
+    log.f_obs=dmvnorm(y_obs,m_obs,v_obs,log=T)
   }else{
-    f_obs=1
+    # f_obs=1
+    log.f_obs=0  
   }
   
   if(length(cenlst)>0){
@@ -34,12 +65,14 @@ eval_density=function(y,c,m,v){
     ubd[c[cenlst]==-1]=y[c==-1]
     ubd[c[cenlst]==1]=Inf
     
-    p_cen=pcmvnorm(lower=lbd, upper=ubd, mean=m, sigma=v, dep=cenlst, given=obslst, X=y[obslst])
-    
+    # p_cen=pcmvnorm(lower=lbd, upper=ubd, mean=m, sigma=v, dep=cenlst, given=obslst, X=y[obslst])
+    log.p_cen=log(pcmvnorm(lower=lbd, upper=ubd, mean=m, sigma=v, dep=cenlst, given=obslst, X=y[obslst]))
   }else{
-    p_cen=1
+    # p_cen=1
+    log.p_cen=0  
   }
-  return(unname(p_cen*f_obs))
+  # return(unname(p_cen*f_obs))
+  return(unname(log.p_cen+log.f_obs))  
 }
 
 # g=2
