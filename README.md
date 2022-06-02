@@ -5,7 +5,7 @@ Authors: Ganzhong Tian <gavin.tian@emory.edu>; Benjamin Risk <benjamin.risk@emor
 
 This project is an extension of the Gaussian Mixture Regression (GMR) model to handel censored multivariate responses.
 
-The **MixCenMVReg_EM.R** is an EM algorithm implementation of the Censored GMR model wuth multivariate responses, whereas **MixCenUVReg_EM.R** is 
+The **MixCenMVReg_EM.R** is an EM algorithm implementation of the Censored GMR model with multivariate responses, whereas **MixCenUVReg_EM.R** is 
 a univariate response Version.
 
 The dependent R packages are listed as below:
